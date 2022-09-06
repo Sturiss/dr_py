@@ -4,22 +4,25 @@
   <a href="https://alist.nn.ci"><img height="100px" alt="logo" src="https://gitcode.net/qq_32394351/dr_py/-/raw/1fe0e082b1ceacc4469d7f175a605cc2edf0bab0/static/img/icon.png"/></a>
   <p><em>🗂️A webServer convert web and x5 movie sites to cms api data</em></p>
   <a href="https://gitcode.net/qq_32394351/dr_py/-/releases">
-    <img src="https://img.shields.io/badge/version-3.1.0-blue" alt="latest version" />
+    <img src="https://img.shields.io/badge/version-3.2.1-blue" alt="latest version" />
   </a>
   <a href="https://gitcode.net/qq_32394351/dr_py/-/issues">
     <img src="https://img.shields.io/badge/discussions-2-orange" alt="discussions" />
   </a>
 
   <a href="https://gitcode.net/qq_32394351/dr_py/-/releases">
-    <img src="https://img.shields.io/badge/downloads-268-blue" alt="Downloads" />
+    <img src="https://img.shields.io/badge/downloads-1325-blue" alt="Downloads" />
   </a>
 
-<a href="https://wwi.lanzoup.com/iDeIj0b27qob">
-    <img src="https://img.shields.io/badge/蓝奏云下载-3.1.1-blue" alt="Downloads" />
+
+<a href="https://wwi.lanzoup.com/iEfIW0b6vgza">
+    <img src="https://img.shields.io/badge/蓝奏云下载-3.2.1-blue" alt="Downloads" />
   </a>
+
+
 
 <a href="https://hub.docker.com/repository/docker/hjdhnx/drpy">
-    <img src="https://img.shields.io/badge/docker镜像-drpy-blue" alt="Downloads" />
+    <img src="https://img.shields.io/badge/docker镜像主页-drpy-blue" alt="Downloads" />
   </a>
 
   <a href="https://gitcode.net/qq_32394351/dr_py/-/blob/master/LICENSE">
@@ -43,9 +46,22 @@
 [dockerfile教程](https://blog.csdn.net/qq_46158060/article/details/125718218)   
 [获取本地设备信息](https://blog.csdn.net/cui_yonghua/article/details/125508991)   
 [获取本地设备信息](https://m.jb51.net/article/140716.htm)   
-###### 2022/09/04
+###### 2022/09/07
+- [X] 1.优化后台管理登录界面,升级更新脚本
+###### 2022/09/06
+- [X] 1.增加了后台管理界面在线检测升级系统功能
+- [X] 2.增加了后台管理界面修改直播源地址和同步直播源
+- [X] 3.首页推荐内容不限制数量(新版pluto牛逼!!!)
+- [X] 4.增加lsg配置模型和缓存
+- [X] 5.增加了默认alist挂载
+- [X] 6.升级到3.2.0,进行了全面后端重构用了蓝图写法,app.py文件以后尽量不动
+- [X] 7.后台管理界面显示美化-感谢蓝莓果酱
+- [X] 8.打包升级后的三平台镜像(v3.2.1)
+- [X] 9.首页美化,升级版本号(v3.2.2)
+###### 2022/09/05
 - [X] 1.内置jar修复了原本tv_box无法播放直播的问题
 - [X] 2.重新构建了三种平台的镜像 amd64,armv7,arm64
+- [X] 3.优化日志打印wlan信息
 ###### 2022/09/04
 - [X] 1.增加了dockerfile
 - [X] 2.基于dockerfile构建的镜像并上传至dockerhub,小白可以一键运行.参考[搭建教程](./安卓本地搭建说明.md)
