@@ -7,11 +7,17 @@
 import base64
 from urllib.parse import urljoin
 
-import requests
+import requests,warnings
+# 关闭警告
+warnings.filterwarnings("ignore")
+from requests.packages import urllib3
+urllib3.disable_warnings()
+
 import requests.utils
 from time import sleep
 import os
 from utils.web import UC_UA,PC_UA
+from ast import literal_eval
 
 def getPreJs():
     base_path = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))  # 上级目
@@ -158,6 +164,7 @@ def dealObj(obj=None):
     }
 
 def base_request(url,obj,method=None):
+    # verify=False 关闭证书验证
     url = str(url).replace("'", "")
     if not method:
         method = 'get'
@@ -166,9 +173,9 @@ def base_request(url,obj,method=None):
     try:
         # r = requests.get(url, headers=headers, params=body, timeout=timeout)
         if method.lower() == 'get':
-            r = requests.get(url, headers=obj['headers'], params=obj['body'], timeout=obj['timeout'])
+            r = requests.get(url, headers=obj['headers'], params=obj['body'], timeout=obj['timeout'],verify=False)
         else:
-            r = requests.post(url, headers=obj['headers'], data=obj['body'], timeout=obj['timeout'])
+            r = requests.post(url, headers=obj['headers'], data=obj['body'], timeout=obj['timeout'],verify=False)
         # r = requests.get(url, timeout=timeout)
         # r = requests.get(url)
         # print(encoding)
@@ -217,3 +224,7 @@ def buildUrl(url,obj=None):
     url = (url + prs).replace('"','').replace("'",'')
     # print(url)
     return url
+
+def parseText(text:str):
+    text = text.replace('false','False').replace('true','True').replace('null','None')
+    return literal_eval(text)

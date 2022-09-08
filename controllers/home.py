@@ -6,11 +6,11 @@
 import json
 import os
 
-from flask import Blueprint,abort,render_template,url_for,redirect,make_response
+from flask import Blueprint,abort,render_template,render_template_string,url_for,redirect,make_response
 from controllers.service import storage_service
 from controllers.classes import getClasses,getClassInfo
 from utils.web import getParmas
-from utils.files import getPics
+from utils.files import getPics,custom_merge
 from js.rules import getRules
 from base.R import R
 from utils.system import cfg,getHost,is_linux
@@ -18,6 +18,7 @@ from utils import parser
 from utils.log import logger
 from utils.files import getAlist,get_live_url
 from utils.update import getLocalVer
+from utils.encode import parseText
 from js.rules import getJxs
 import random
 
@@ -94,6 +95,37 @@ def plugin(name):
     except Exception as e:
         return R.failed(f'非法猥亵\n{e}')
 
+@home.route('/files/<name>')
+def get_files(name):
+    base_path = 'base/files'
+    os.makedirs(base_path,exist_ok=True)
+    file_path = os.path.join(base_path, f'{name}')
+    if not os.path.exists(file_path):
+        return R.failed(f'{file_path}文件不存在')
+
+    with open(file_path, mode='rb') as f:
+        file_byte = f.read()
+    response = make_response(file_byte)
+    filename = name
+    response.headers['Content-Type'] = 'application/octet-stream'
+    response.headers['Content-Disposition'] = f'attachment;filename="{filename}"'
+    return response
+
+@home.route('/txt/<name>')
+def get_txt_files(name):
+    base_path = 'txt'
+    os.makedirs(base_path,exist_ok=True)
+    file_path = os.path.join(base_path, f'{name}')
+    if not os.path.exists(file_path):
+        return R.failed(f'{file_path}文件不存在')
+
+    with open(file_path, mode='r',encoding='utf-8') as f:
+        file_byte = f.read()
+    response = make_response(file_byte)
+    response.headers['Content-Type'] = 'text/plain; charset=utf-8'
+    return response
+
+
 @home.route('/lives')
 def get_lives():
     live_path = 'js/直播.txt'
@@ -125,18 +157,33 @@ def get_liveslib():
 @home.route('/config/<int:mode>')
 def config_render(mode):
     # print(dict(app.config))
+    customFile = 'base/custom.conf'
+    if not os.path.exists(customFile):
+        with open(customFile,'w+',encoding='utf-8') as f:
+            f.write('{}')
+    customConfig = False
     if mode == 1:
         jyw_ip = getHost(mode)
         logger.info(jyw_ip)
     new_conf = cfg
     host = getHost(mode)
+    try:
+        with open(customFile,'r',encoding='utf-8') as f:
+            text = f.read()
+            customConfig = parseText(render_template_string(text,host=host))
+    except Exception as e:
+        logger.info(f'用户自定义配置加载失败:{e}')
     jxs = getJxs()
     alists = getAlist()
     alists_str = json.dumps(alists, ensure_ascii=False)
     live_url = get_live_url(new_conf,mode)
     # html = render_template('config.txt',rules=getRules('js'),host=host,mode=mode,jxs=jxs,base64Encode=base64Encode,config=new_conf)
     html = render_template('config.txt',rules=getRules('js'),host=host,mode=mode,jxs=jxs,alists=alists,alists_str=alists_str,live_url=live_url,config=new_conf)
-    response = make_response(html)
+    merged_config = custom_merge(parseText(html),customConfig)
+    # print(merged_config)
+    # response = make_response(html)
+    response = make_response(json.dumps(merged_config,ensure_ascii=False,indent=1))
+    # response = make_response(str(merged_config))
     response.headers['Content-Type'] = 'application/json; charset=utf-8'
     return response
 

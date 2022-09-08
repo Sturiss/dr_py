@@ -6,82 +6,60 @@
   <meta name="description" content="particles.js is a lightweight JavaScript library for creating particles.">
   <meta name="author" content="道长"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<!--    <link rel="stylesheet" media="screen" href="/static/css/admin.css">-->
     <link rel="stylesheet" media="screen" href="/static/css/admin.css">
   <link rel="icon" href="/static/img/logo.png" type="image/x-icon">
     <script src="/static/js/jquery.min.js"></script>
+    <script src="/static/js/common.js"></script>
 </head>
-<style>
-    .red {
-        color:red;
-        font-weight: bold;
-        padding-left:10px;
-        /*padding-top:10px;*/
-        margin-left:10px;
-        width: 360px;
-        height: 30px;
-    }
-    .green {
-        color:forestgreen;
-        font-weight: bold;
-        padding-left:10px;
-        /*padding-top:10px;*/
-        margin-left:10px;
-        width: 360px;
-        height: 30px;
-    }
-    .btn{
-        color:#FFFFFF;
-        background-color: #1379cb;
-    }
-    .clear{
-        /*word-spacing:2px;*/
-        letter-spacing:5px;
-        margin-left:20px;
-        width: 120px;
-        height: 30px;
-        text-align: center;
-        border-style: solid;
-        /*border-color: #8CD4F5;*/
-        border-color: #1379cb;
-        text-decoration:none;
-        color:#FFFFFF;
-        background-color: #1379cb;
-    }
-    .view_home{
-        letter-spacing:5px;
-        margin-left:20px;
-        width: 150px;
-        height: 30px;
-        text-align: center;
-        border-style: solid;
-        /*border-color: #8CD4F5;*/
-        border-color: #17af30;
-        text-decoration:none;
-        color:#FFFFFF;
-        background-color: #17af30;
-    }
-    /*li a {*/
-    /*    display: block !important;*/
-    /*}*/
-</style>
 <body>
 <script>
     $(document).ready(function(){
         $(".view").click(function(){
-            // location.reload();
             let rule = this.innerText.trim();
             location.href = '/admin/view/'+rule+'.js';
         });
 
         $(".view_home").click(function(){
-            // location.reload();
             let rule = this.getAttribute('value').trim();
             location.href = '/vod?rule='+rule;
         });
 
+        $("#checkUpdate").click(function(){
+            console.log('开始检查升级...');
+            $.get("/admin/get_ver",function(data,status){
+                console.log("数据: " + data + "\n状态: " + status);
+                if(data.msg){
+                    alert(data.msg);
+                    return false
+                }else{
+                    if(data.local_ver && data.online_ver){
+                        if(data.local_ver !== data.online_ver){
+                            msg = `本地版本:${data.local_ver}\n线上版本:${data.online_ver}\n是否立即执行升级?`;
+                            if(confirm(msg)){
+                               $.get("/admin/update_ver",function(data,status){
+                                   console.log(data);
+                                   if(data.code === 200){
+                                       alert(data.msg+'\n除主程序app.py需要自行检测替换升级外,其他关键文件全部更新完毕');
+                                      location.reload();
+                                   }else{
+                                       alert(data.msg||'未知数据,具体到数据控制台查看');
+                                       console.log('升级失败了...');
+                                       return false
+                                   }
+                               });
+                            }
+                        }else{
+                            alert('已经是最新版,无需升级!')
+                        }
+                    }else{
+                        alert('已经是最新版,无需升级!')
+                    }
+                }
+            });
+        });
+
         $(".clear").click(function(){
-            // location.reload();
-            // let rule = this.innerText.trim();
             let rule = this.getAttribute('value').trim();
             if(confirm('确认删除内置规则:'+rule+'?')){
             let code = $.ajax({url:'/admin/clear/'+rule+'.js',async:false}).responseText;
@@ -93,12 +71,11 @@
                 alert('操作失败!\n'+code.msg);
             }
             }
-            // location.href = '/admin/clear/'+rule;
         });
 
         $('#upload').click(function(){
             var file_data = $("input[name='file']").prop("files")[0];
-            console.log(file_data);
+            // console.log(file_data);
             if(!file_data){
                 alert('文件必选');
                 return false
@@ -115,7 +92,7 @@
             form_data.append("file", file_data);
             $.ajax({
                 type: "POST",
-                url: "/upload",
+                url: "/admin/upload",
                 dataType : "json",
                 processData: false,  // 注意：让jQuery不要处理数据
                 contentType: false,  // 注意：让jQuery不要设置contentType
@@ -128,58 +105,84 @@
                 console.log(ret);
                 alert(ret.msg);
             });
+        });
 
+        $('#update_lives').click(function(){
+            let live_url = $('#live_url').val();
+            // console.log(live_url);
+            let new_live_url = prompt('输入临时同步远程直播源地址(自动获取当前配置)',live_url);
+            if(new_live_url.startsWith('http')){
+                $.get("/admin/update_lives?url="+new_live_url,function(data,status){
+                console.log("数据: " + data + "\n状态: " + status);
+                if(data.code === 200){
+                    alert('操作成功!\n'+data.msg);
+                    // location.reload();
+                }else{
+                    alert('操作失败!\n'+data.msg);
+                }
+             });
+            }
+        });
+
+        $('#write_lives').click(function(){
+            let live_url = $('#live_url').val();
+            let new_live_url = prompt('请修改默认的远程直播源地址',live_url);
+            if(new_live_url){
+                console.log('修改直播源地址为:'+new_live_url);
+                $.get("/admin/write_live_url?url="+new_live_url,function(data,status){
+                console.log("数据: " + data + "\n状态: " + status);
+                if(data.code === 200){
+                    alert('操作成功!\n'+data.msg);
+                    location.reload();
+                }else{
+                    alert('操作失败!\n'+data.msg);
+                }
+             });
+            }
         });
 
 });
- function getFileSize(fileObj)
-       {
-           $('#file_size').text('文件大小为:'+fileObj.files[0].size/1024+'kb');
-       }
+function getFileSize(fileObj) {
+   $('#file_size').text('文件大小为:'+fileObj.files[0].size/1024+'kb');
+}
 </script>
-
-<h2 class="title">欢迎使用drpy管理员界面</h2><h4><a href="/index">返回首页</a></h4>
-<p>你可以在此页面在线上传规则文件到js目录或者删除js目录的文件</p>
- <form action = "/upload" method = "POST" enctype = "multipart/form-data">
+<h2 class="title">欢迎使用DR-PY管理界面<div><span class="ver_title">当前版本: {{ ver }}</span><span
+                class="ver_title">框架开发：道长</span><span class="ver_title">框架美化：蓝莓</span></div>
+</h2>
+<h4>
+    <button type="button" class="yongyin"><a href="/index">返回首页</a></button>
+    <button type="button" class="yongyin1"><a href="javascript:void(0);" class="funcbtn"
+            id="checkUpdate">检测升级</a></button>
+    <button type="button" class="yongyin2"><a href="javascript:copy('cp ./tmp/dr_py-master/app.py ./app.py');"
+            class="funcbtn" id="update_by_self">升级指令</a></button>
+    <button type="button" class="yongyin2"><a href="javascript:copy('cp ./tmp/dr_py-master/base/custom.conf base');"
+            class="funcbtn" id="user_custom">用户配置</a></button>
+    <button type="button" class="yongyin3"><a href="javascript:void(0);" class="funcbtn"
+            id="write_lives">修改直播源</a></button>
+    <button type="button" class="yongyin4"><a href="javascript:void(0);" class="funcbtn"
+            id="update_lives">同步直播源</a></button>
+    <input id="live_url" value="{{live_url}}" style="display: none">
+    <p class="box">你可以在此界面在线管理JS目录里规则文件的上传/删除</p>
+</h4>
+ <form action = "/admin/upload" method = "POST" enctype = "multipart/form-data">
 <!--     <input type = "file" name = "file" class="btn" accept=".js"  onchange="getFileSize(this)"/>-->
      <input type = "file" name = "file" class="btn" onchange="getFileSize(this)"/>
 <!--     <input type = "submit" value="上传" class="btn"/>-->
      <input type="button" id="upload" value="上传" class="btn"/>
 </form>
 <p id="file_size"></p>
-
-<h1>内置规则列表-共{{rules.count}}条</h1>
+<h2>规则列表数据-共{{rules.count}}条</h2>
 {% if rules.count < 1 %}
 <h3>暂无内置的规则</h3>
 {% endif %}
+<div class="zt">
 {% for rule in rules.list %}
-    	{% if rule.name|length > 2 %}
-        	<li class="red">
-                <a class="view" href="javascript:void(0);">{{ rule.name }}</a>
-                <a class="view_home" href="javascript:void(0);" value="{{ rule.name }}">主页数据预览</a>
-                <a class="clear" href="javascript:void(0);" value="{{ rule.name }}">删除</a>
-            </li>
-        {% else %}
-            <li class="green">
-                <a class="view" href="javascript:void(0);">{{ rule.name }}</a>
-                <a class="view_home" href="javascript:void(0);" value="{{ rule.name }}">主页数据预览</a>
-                <a class="clear" href="javascript:void(0);" value="{{ rule.name }}">删除</a>
-            </li>
-        {% endif %}
+    <div class="red">
+         <div class="mz"><a class="view" href="javascript:void(0);">{{ rule.name }}</a></div>
+        <div class="sj"><a class="view_home" href="javascript:void(0);" value="{{ rule.name }}">主页数据预览</a></div>
+        <div class="sc"><a class="clear" href="javascript:void(0);" value="{{ rule.name }}">删除</a></div>
+    </div>
  {% endfor %}
-<!--{% if rules.count > 0 %}-->
-<!--<h1>删除内置规则</h1>-->
-<!--{% for rule in rules.list %}-->
-<!--{% if rule|length > 2 %}-->
-<!--    <li class="red">-->
-<!--        <a class="clear" href="javascript:void(0);">{{ rule.name }}</a>-->
-<!--    </li>-->
-<!--{% else %}-->
-<!--    <li class="yellow">-->
-<!--        <a class="clear" href="javascript:void(0);">{{ rule.name }}</a>-->
-<!--    </li>-->
-<!--{% endif %}-->
-<!-- {% endfor %}-->
-<!--{% endif %}-->
+</div>
 </body>
 </html>

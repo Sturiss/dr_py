@@ -3,6 +3,7 @@
 # File  : cms.py
 # Author: DaShenHan&道长-----先苦后甜，任凭晚风拂柳颜------
 # Date  : 2022/8/25
+import json
 
 import requests
 import re
@@ -24,7 +25,8 @@ from easydict import EasyDict as edict
 py_ctx = {
 'requests':requests,'print':print,'base64Encode':base64Encode,'baseDecode':baseDecode,
 'log':logger.info,'fetch':fetch,'post':post,'request':request,'getCryptoJS':getCryptoJS,
-'buildUrl':buildUrl,'getHome':getHome,'setDetail':setDetail,'join':join,'urljoin2':urljoin2
+'buildUrl':buildUrl,'getHome':getHome,'setDetail':setDetail,'join':join,'urljoin2':urljoin2,
+'PC_UA':PC_UA,'MOBILE_UA':MOBILE_UA,'UC_UA':UC_UA
 }
 # print(getCryptoJS())
 
@@ -34,12 +36,19 @@ class CMS:
             new_conf = {}
         self.title = rule.get('title', '')
         self.id = rule.get('id', self.title)
+        cate_exclude  = rule.get('cate_exclude','')
         self.lazy = rule.get('lazy', False)
         self.play_disable = new_conf.get('PLAY_DISABLE',False)
         self.retry_count = new_conf.get('RETRY_CNT',3)
         self.lazy_mode = new_conf.get('LAZYPARSE_MODE')
         self.ocr_api = new_conf.get('OCR_API')
         self.cate_exclude = new_conf.get('CATE_EXCLUDE','')
+        if cate_exclude:
+            if not str(cate_exclude).startswith('|') and not str(self.cate_exclude).endswith('|'):
+                self.cate_exclude = self.cate_exclude+'|'+cate_exclude
+            else:
+                self.cate_exclude += cate_exclude
+        # print(self.cate_exclude)
         try:
             self.vod = redirect(url_for('vod')).headers['Location']
         except:
@@ -293,6 +302,25 @@ class CMS:
         else:
             return ''
 
+    def checkHtml(self,r):
+        r.encoding = self.encoding
+        html = r.text
+        if html.find('?btwaf=') > -1:
+            btwaf = re.search('btwaf(.*?)"',html,re.M|re.I).groups()[0]
+            url = r.url.split('#')[0]+'?btwaf'+btwaf
+            # print(f'需要过宝塔验证:{url}')
+            cookies_dict = requests.utils.dict_from_cookiejar(r.cookies)
+            cookie_str = ';'.join([f'{k}={cookies_dict[k]}' for k in cookies_dict])
+            self.headers['cookie'] = cookie_str
+            r = requests.get(url, headers=self.headers, timeout=self.timeout)
+            r.encoding = self.encoding
+            html = r.text
+            if html.find('?btwaf=') < 0:
+                self.saveCookie(cookie_str)
+
+        # print(html)
+        return html
+
     def saveParse(self, play_url,real_url):
         if not self.db:
             msg = '未提供数据库连接'
@@ -359,8 +387,7 @@ class CMS:
                 else:
                     new_classes = []
                     r = requests.get(self.homeUrl, headers=self.headers, timeout=self.timeout)
-                    r.encoding = self.encoding
-                    html = r.text
+                    html = self.checkHtml(r)
                     # print(html)
                     # print(self.headers)
                     if self.class_parse and not has_cache:
@@ -382,7 +409,11 @@ class CMS:
                             # print(url)
                             tag = url
                             if len(p) > 3 and p[3].strip():
-                                tag = self.regexp(p[3].strip(),url,0)
+                                try:
+                                    tag = self.regexp(p[3].strip(),url,0)
+                                except:
+                                    logger.info(f'分类匹配错误:{title}对应的链接{url}无法匹配{p[3]}')
+                                    continue
                             new_classes.append({
                                 'type_name': title,
                                 'type_id': tag
@@ -503,59 +534,88 @@ class CMS:
         url = self.url.replace('fyclass',fyclass).replace('fypage',pg)
         if fypage == 1 and self.test('[\[\]]',url):
             url = url.split('[')[1].split(']')[0]
-        p = self.一级.split(';')  # 解析
-        if len(p) < 5:
-            return self.blank()
-
+        p = self.一级
         jsp = jsoup(self.url)
-        is_json = str(p[0]).startswith('json:')
-        pdfh = jsp.pjfh if is_json else jsp.pdfh
-        pdfa = jsp.pjfa if is_json else jsp.pdfa
-        pd = jsp.pj if is_json else jsp.pd
-        # print(pdfh(r.text,'body a.module-poster-item.module-item:eq(1)&&Text'))
-        # print(pdfh(r.text,'body a.module-poster-item.module-item:eq(0)'))
-        # print(pdfh(r.text,'body a.module-poster-item.module-item:first'))
-
         videos = []
-        items = []
-        try:
-            r = requests.get(url, headers=self.headers, timeout=self.timeout)
-            r.encoding = self.encoding
-            print(r.url)
-            # html = r.text
-            html = r.json() if is_json else r.text
-            # print(html)
-            items = pdfa(html,p[0].replace('json:','',1))
-        except:
-            pass
-        # print(items)
-        for item in items:
-            # print(item)
+        is_js = isinstance(p, str) and str(p).startswith('js:')  # 是js
+        if is_js:
+            headers['Referer'] = getHome(url)
+            py_ctx.update({
+                'input': url,
+                'fetch_params': {'headers': headers, 'timeout': self.d.timeout, 'encoding': self.d.encoding},
+                'd': self.d,
+                'cateID':fyclass, # 分类id
+                'detailUrl':self.detailUrl or '', # 详情页链接
+                'getParse': self.d.getParse,
+                'saveParse': self.d.saveParse,
+                'jsp': jsp, 'setDetail': setDetail,
+            })
+            ctx = py_ctx
+            # print(ctx)
+            jscode = getPreJs() + p.replace('js:', '', 1)
+            # print(jscode)
+            loader, _ = runJScode(jscode, ctx=ctx)
+            # print(loader.toString())
+            vods = loader.eval('VODS')
+            # print(vods)
+            if isinstance(vods, JsObjectWrapper):
+                videos = vods.to_list()
+
+        else:
+            p = p.split(';')  # 解析
+            if len(p) < 5:
+                return self.blank()
+
+            is_json = str(p[0]).startswith('json:')
+            pdfh = jsp.pjfh if is_json else jsp.pdfh
+            pdfa = jsp.pjfa if is_json else jsp.pdfa
+            pd = jsp.pj if is_json else jsp.pd
+            # print(pdfh(r.text,'body a.module-poster-item.module-item:eq(1)&&Text'))
+            # print(pdfh(r.text,'body a.module-poster-item.module-item:eq(0)'))
+            # print(pdfh(r.text,'body a.module-poster-item.module-item:first'))
+
+            items = []
             try:
-                title = pdfh(item, p[1])
-                img = pd(item, p[2])
-                desc = pdfh(item, p[3])
-                links = [pd(item, p4) if not self.detailUrl else pdfh(item, p4) for p4 in p[4].split('+')]
-                link = '$'.join(links)
-                content = '' if len(p) < 6 else pdfh(item, p[5])
-                # sid = self.regStr(sid, "/video/(\\S+).html")
-                videos.append({
-                    "vod_id": f'{fyclass}${link}' if self.detailUrl else link,# 分类,播放链接
-                    "vod_name": title,
-                    "vod_pic": img,
-                    "vod_remarks": desc,
-                    "vod_content": content,
-                })
-            except Exception as e:
-                print(f'发生了错误:{e}')
+                r = requests.get(url, headers=self.headers, timeout=self.timeout)
+                html = self.checkHtml(r)
+                if is_json:
+                    html = json.loads(html)
+                # print(html)
+                items = pdfa(html,p[0].replace('json:','',1))
+            except:
                 pass
+            # print(items)
+            for item in items:
+                # print(item)
+                try:
+                    title = pdfh(item, p[1])
+                    img = pd(item, p[2])
+                    desc = pdfh(item, p[3])
+                    links = [pd(item, p4) if not self.detailUrl else pdfh(item, p4) for p4 in p[4].split('+')]
+                    link = '$'.join(links)
+                    content = '' if len(p) < 6 else pdfh(item, p[5])
+                    # sid = self.regStr(sid, "/video/(\\S+).html")
+                    videos.append({
+                        "vod_id": f'{fyclass}${link}' if self.detailUrl else link,# 分类,播放链接
+                        "vod_name": title,
+                        "vod_pic": img,
+                        "vod_remarks": desc,
+                        "vod_content": content,
+                    })
+                except Exception as e:
+                    print(f'发生了错误:{e}')
+                    pass
+        # print(videos)
+        limit = 40
+        cnt = 9999 if len(videos) > 0 else 0
         result['list'] = videos
         result['page'] = fypage
-        result['pagecount'] = 9999
-        result['limit'] = 9999
-        result['total'] = 999999
+        result['pagecount'] = max(cnt,fypage)
+        result['limit'] = limit
+        result['total'] = cnt
+        # print(result)
         logger.info(f'{self.getName()}获取分类{fyclass}第{fypage}页耗时:{get_interval(t1)}毫秒,共计{round(len(str(result)) / 1000, 2)} kb')
-        
+
         return result
 
     def detailOneVod(self,id,fyclass=''):
@@ -565,7 +625,7 @@ class CMS:
             url = self.detailUrl.replace('fyid', detailUrl).replace('fyclass',fyclass)
         else:
             url = detailUrl
-        # print(url)
+        print(url)
         try:
             p = self.二级  # 解析
             if p == '*':
@@ -615,10 +675,9 @@ class CMS:
                 obj = {}
                 vod_name = ''
                 r = requests.get(url, headers=self.headers, timeout=self.timeout)
-                r.encoding = self.encoding
-                # html = r.text
-                html = r.json() if is_json else r.text
-                # print(html)
+                html = self.checkHtml(r)
+                if is_json:
+                    html = json.loads(html)
                 if p.get('title'):
                     p1 = p['title'].split(';')
                     vod_name = pdfh(html,p1[0]).replace('\n',' ')
@@ -627,19 +686,28 @@ class CMS:
                     # print(title)
                     obj['title'] = title
                 if p.get('desc'):
-                    p1 = p['desc'].split(';')
-                    desc = '\n'.join([pdfh(html,i).replace('\n',' ') for i in p1])
-                    obj['desc'] = desc
+                    try:
+                        p1 = p['desc'].split(';')
+                        desc = '\n'.join([pdfh(html,i).replace('\n',' ') for i in p1])
+                        obj['desc'] = desc
+                    except:
+                        pass
 
                 if p.get('content'):
                     p1 = p['content'].split(';')
-                    content = '\n'.join([pdfh(html,i).replace('\n',' ') for i in p1])
-                    obj['content'] = content
+                    try:
+                        content = '\n'.join([pdfh(html,i).replace('\n',' ') for i in p1])
+                        obj['content'] = content
+                    except:
+                        pass
 
                 if p.get('img'):
-                    p1 = p['img'].split(';')
-                    img = '\n'.join([pdfh(html,i).replace('\n',' ') for i in p1])
-                    obj['img'] = img
+                    p1 = p['img']
+                    try:
+                        img = pd(html,p1)
+                        obj['img'] = img
+                    except Exception as e:
+                        logger.info(f'二级图片定位失败,但不影响使用{e}')
 
                 vod = {
                     "vod_id": detailUrl,
@@ -757,9 +825,9 @@ class CMS:
         videos = []
         try:
             r = requests.get(url, headers=self.headers,timeout=self.timeout)
-            r.encoding = self.encoding
-            # html = r.text
-            html = r.json() if is_json else r.text
+            html = self.checkHtml(r)
+            if is_json:
+                html = json.loads(html)
             # print(html)
             if not is_json and html.find('输入验证码') > -1:
                 cookie = verifyCode(url,self.headers,self.timeout,self.retry_count,self.ocr_api)
@@ -781,8 +849,14 @@ class CMS:
                 # print(item)
                 try:
                     title = pdfh(item, p[1])
-                    img = pd(item, p[2])
-                    desc = pdfh(item, p[3])
+                    try:
+                        img = pd(item, p[2])
+                    except:
+                        img = ''
+                    try:
+                        desc = pdfh(item, p[3])
+                    except:
+                        desc = ''
                     # link = '$'.join([pd(item, p4) for p4 in p[4].split('+')])
                     links = [pd(item, p4) if not self.detailUrl else pdfh(item, p4) for p4 in p[4].split('+')]
                     link = '$'.join(links)
